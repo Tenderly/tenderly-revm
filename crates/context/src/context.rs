@@ -246,6 +246,27 @@ where
         }
     }
 
+    /// Creates a new context with a custom Journal implementation.
+    /// This allows using a custom journal that implements JournalTr,
+    /// such as TracingJournal for tracking original states.
+    pub fn with_custom_journal<J>(
+        self,
+        journaled_state: J,
+    ) -> Context<BLOCK, TX, CFG, J::Database, J, CHAIN, LOCAL>
+    where
+        J: JournalTr,
+    {
+        Context {
+            tx: self.tx,
+            block: self.block,
+            cfg: self.cfg,
+            journaled_state,
+            local: self.local,
+            chain: self.chain,
+            error: Ok(()),
+        }
+    }
+
     /// Creates a new context with a new block type.
     pub fn with_block<OB: Block>(
         self,
