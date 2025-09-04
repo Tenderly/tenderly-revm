@@ -64,6 +64,12 @@ pub struct JournalInner<ENTRY> {
     pub warm_coinbase_address: Option<Address>,
     /// Precompile addresses
     pub precompiles: HashSet<Address>,
+    
+    // Fields for tracking original states (for live tracing)
+    /// Original states of accounts when they were first loaded in this transaction
+    pub original_account_states: HashMap<Address, state::AccountInfo>,
+    /// Original storage values when they were first loaded in this transaction
+    pub original_storage_states: HashMap<Address, HashMap<StorageKey, StorageValue>>,
 }
 
 impl<ENTRY: JournalEntryTr> Default for JournalInner<ENTRY> {
@@ -89,6 +95,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses: HashSet::default(),
             precompiles: HashSet::default(),
             warm_coinbase_address: None,
+            original_account_states: HashMap::default(),
+            original_storage_states: HashMap::default(),
         }
     }
 
@@ -119,6 +127,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses,
             precompiles,
             warm_coinbase_address,
+            original_account_states,
+            original_storage_states,
         } = self;
         // Spec precompiles and state are not changed. It is always set again execution.
         let _ = spec;
@@ -129,6 +139,10 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
 
         // Do nothing with journal history so we can skip cloning present journal.
         journal.clear();
+        
+        // Clear original state tracking for next transaction
+        original_account_states.clear();
+        original_storage_states.clear();
 
         // Clear coinbase address warming for next tx
         *warm_coinbase_address = None;
@@ -155,6 +169,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses,
             warm_coinbase_address,
             precompiles,
+            original_account_states,
+            original_storage_states,
         } = self;
 
         let is_spurious_dragon_enabled = spec.is_enabled_in(SPURIOUS_DRAGON);
@@ -166,6 +182,9 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
         *depth = 0;
         logs.clear();
         *transaction_id += 1;
+        // Clear original state tracking for next transaction
+        original_account_states.clear();
+        original_storage_states.clear();
         // Clear coinbase address warming for next tx
         *warm_coinbase_address = None;
         reset_preloaded_addresses(warm_preloaded_addresses, precompiles);
@@ -190,6 +209,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses,
             warm_coinbase_address,
             precompiles,
+            original_account_states,
+            original_storage_states,
         } = self;
         // Spec is not changed. And it is always set again in execution.
         let _ = spec;
@@ -201,6 +222,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
         let state = mem::take(state);
         logs.clear();
         transient_storage.clear();
+        original_account_states.clear();
+        original_storage_states.clear();
 
         // clear journal and journal history.
         journal.clear();
@@ -672,11 +695,17 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
                 }
             }
             Entry::Vacant(vac) => {
-                let account = if let Some(account) = db.basic(address)? {
-                    account.into()
+                let account_info = db.basic(address)?;
+                let account = if let Some(info) = account_info.clone() {
+                    Account::from(info.clone())
                 } else {
                     Account::new_not_existing(self.transaction_id)
                 };
+                
+                // Save original account state when first loading (for live tracing)
+                if let Some(info) = account_info {
+                    self.original_account_states.entry(address).or_insert(info);
+                }
 
                 // Precompiles among some other account(coinbase included) are warm loaded so we need to take that into account
                 let is_cold = !self.warm_preloaded_addresses.contains(&address)
@@ -732,6 +761,18 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
     ) -> Result<StateLoad<StorageValue>, DB::Error> {
         // assume acc is warm
         let account = self.state.get_mut(&address).unwrap();
+        
+        // Save original storage value when first loading (for live tracing)
+        // Check if we haven't seen this storage slot yet
+        if !account.storage.contains_key(&key) && !account.is_created() {
+            let original_value = db.storage(address, key)?;
+            self.original_storage_states
+                .entry(address)
+                .or_insert_with(HashMap::new)
+                .entry(key)
+                .or_insert(original_value);
+        }
+        
         // only if account is created in this tx we can assume that storage is empty.
         sload_with_account(
             account,
