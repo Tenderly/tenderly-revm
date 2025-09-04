@@ -768,7 +768,7 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             let original_value = db.storage(address, key)?;
             self.original_storage_states
                 .entry(address)
-                .or_insert_with(HashMap::new)
+                .or_insert_with(|| HashMap::with_hasher(Default::default()))
                 .entry(key)
                 .or_insert(original_value);
         }
