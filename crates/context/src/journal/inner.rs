@@ -140,9 +140,9 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
         // Do nothing with journal history so we can skip cloning present journal.
         journal.clear();
         
-        // Clear original state tracking for next transaction
-        original_account_states.clear();
-        original_storage_states.clear();
+        // DON'T clear original state tracking - keep it for entire block!
+        // original_account_states.clear();  // REMOVED - keep originals
+        // original_storage_states.clear();   // REMOVED - keep originals
 
         // Clear coinbase address warming for next tx
         *warm_coinbase_address = None;
@@ -182,9 +182,9 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
         *depth = 0;
         logs.clear();
         *transaction_id += 1;
-        // Clear original state tracking for next transaction
-        original_account_states.clear();
-        original_storage_states.clear();
+        // DON'T clear original state tracking - keep it for entire block!
+        // original_account_states.clear();  // REMOVED - keep originals
+        // original_storage_states.clear();   // REMOVED - keep originals
         // Clear coinbase address warming for next tx
         *warm_coinbase_address = None;
         reset_preloaded_addresses(warm_preloaded_addresses, precompiles);
@@ -222,8 +222,9 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
         let state = mem::take(state);
         logs.clear();
         transient_storage.clear();
-        original_account_states.clear();
-        original_storage_states.clear();
+        // DON'T clear original state tracking - keep it for entire block!
+        // original_account_states.clear();  // REMOVED - keep originals  
+        // original_storage_states.clear();   // REMOVED - keep originals
 
         // clear journal and journal history.
         journal.clear();
@@ -703,6 +704,7 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
                 };
                 
                 // Save original account state when first loading (for live tracing)
+                // Only save if we haven't seen this address before in the entire block
                 if let Some(info) = account_info {
                     self.original_account_states.entry(address).or_insert(info);
                 }
@@ -763,14 +765,14 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
         let account = self.state.get_mut(&address).unwrap();
         
         // Save original storage value when first loading (for live tracing)
-        // Check if we haven't seen this storage slot yet
+        // Only save if we haven't seen this storage slot before in the entire block
         if !account.storage.contains_key(&key) && !account.is_created() {
             let original_value = db.storage(address, key)?;
             self.original_storage_states
                 .entry(address)
                 .or_insert_with(|| HashMap::with_hasher(Default::default()))
                 .entry(key)
-                .or_insert(original_value);
+                .or_insert(original_value);  // or_insert ensures we only save first value
         }
         
         // only if account is created in this tx we can assume that storage is empty.
