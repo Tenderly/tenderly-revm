@@ -3,9 +3,9 @@ use crate::context::{SStoreResult, SelfDestructResult};
 use core::ops::{Deref, DerefMut};
 use database_interface::Database;
 use primitives::{
-    hardfork::SpecId, Address, Bytes, HashSet, Log, StorageKey, StorageValue, B256, U256,
+    hardfork::SpecId, Address, Bytes, HashMap, HashSet, Log, StorageKey, StorageValue, B256, U256,
 };
-use state::{Account, Bytecode};
+use state::{Account, AccountInfo, Bytecode};
 use std::vec::Vec;
 
 /// Trait that contains database and journal of all changes that were made to the state.
@@ -212,6 +212,25 @@ pub trait JournalTr {
 
     /// Clear current journal resetting it to initial state and return changes state.
     fn finalize(&mut self) -> Self::State;
+
+    /// Get original account states (captured at first load in block)
+    /// Returns empty HashMap if not supported by this Journal implementation
+    fn get_original_account_states(&self) -> HashMap<Address, AccountInfo> {
+        HashMap::new() // Default implementation for compatibility
+    }
+
+    /// Get original storage states (captured at first load in block)  
+    /// Returns empty HashMap if not supported by this Journal implementation
+    fn get_original_storage_states(&self) -> HashMap<Address, HashMap<StorageKey, StorageValue>> {
+        HashMap::new() // Default implementation for compatibility
+    }
+
+    /// Get current modified state
+    /// Returns reference to the current state map
+    fn get_current_state(&self) -> &HashMap<Address, Account>;
+    
+    /// Get mutable reference to current state
+    fn get_current_state_mut(&mut self) -> &mut HashMap<Address, Account>;
 }
 
 /// Transfer and creation result

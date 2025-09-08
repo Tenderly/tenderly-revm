@@ -15,8 +15,8 @@ use context_interface::{
 };
 use core::ops::{Deref, DerefMut};
 use database_interface::Database;
-use primitives::{hardfork::SpecId, Address, HashSet, Log, StorageKey, StorageValue, B256, U256};
-use state::{Account, EvmState};
+use primitives::{hardfork::SpecId, Address, HashMap, HashSet, Log, StorageKey, StorageValue, B256, U256};
+use state::{Account, AccountInfo, EvmState};
 use std::vec::Vec;
 
 /// A journal of state changes internal to the EVM
@@ -299,5 +299,21 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     #[inline]
     fn finalize(&mut self) -> Self::State {
         self.inner.finalize()
+    }
+
+    fn get_original_account_states(&self) -> HashMap<Address, AccountInfo> {
+        self.inner.original_account_states.clone()
+    }
+
+    fn get_original_storage_states(&self) -> HashMap<Address, HashMap<StorageKey, StorageValue>> {
+        self.inner.original_storage_states.clone()
+    }
+
+    fn get_current_state(&self) -> &HashMap<Address, Account> {
+        &self.inner.state
+    }
+
+    fn get_current_state_mut(&mut self) -> &mut HashMap<Address, Account> {
+        &mut self.inner.state
     }
 }
