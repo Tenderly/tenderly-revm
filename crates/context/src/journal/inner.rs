@@ -127,8 +127,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses,
             precompiles,
             warm_coinbase_address,
-            original_account_states,
-            original_storage_states,
+            original_account_states: _,
+            original_storage_states: _,
         } = self;
         // Spec precompiles and state are not changed. It is always set again execution.
         let _ = spec;
@@ -169,8 +169,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses,
             warm_coinbase_address,
             precompiles,
-            original_account_states,
-            original_storage_states,
+            original_account_states: _,
+            original_storage_states: _,
         } = self;
 
         let is_spurious_dragon_enabled = spec.is_enabled_in(SPURIOUS_DRAGON);
@@ -209,8 +209,8 @@ impl<ENTRY: JournalEntryTr> JournalInner<ENTRY> {
             warm_preloaded_addresses,
             warm_coinbase_address,
             precompiles,
-            original_account_states,
-            original_storage_states,
+            original_account_states: _,
+            original_storage_states: _,
         } = self;
         // Spec is not changed. And it is always set again in execution.
         let _ = spec;
