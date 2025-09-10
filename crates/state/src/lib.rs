@@ -22,6 +22,8 @@ use primitives::{HashMap, StorageKey, StorageValue};
 pub struct Account {
     /// Balance, nonce, and code
     pub info: AccountInfo,
+    /// Original balance, nonce, and code (before transaction)
+    pub original_info: Option<AccountInfo>,
     /// Transaction id, used to track when account was toched/loaded into journal.
     pub transaction_id: usize,
     /// Storage cache
@@ -35,6 +37,7 @@ impl Account {
     pub fn new_not_existing(transaction_id: usize) -> Self {
         Self {
             info: AccountInfo::default(),
+            original_info: None,
             storage: HashMap::default(),
             transaction_id,
             status: AccountStatus::LoadedAsNotExisting,
@@ -52,63 +55,71 @@ impl Account {
     }
 
     /// Marks the account as self destructed.
+    #[inline]
     pub fn mark_selfdestruct(&mut self) {
         self.status |= AccountStatus::SelfDestructed;
     }
 
     /// Unmarks the account as self destructed.
+    #[inline]
     pub fn unmark_selfdestruct(&mut self) {
         self.status -= AccountStatus::SelfDestructed;
     }
 
     /// Is account marked for self destruct.
+    #[inline]
     pub fn is_selfdestructed(&self) -> bool {
         self.status.contains(AccountStatus::SelfDestructed)
     }
 
     /// Marks the account as touched
+    #[inline]
     pub fn mark_touch(&mut self) {
         self.status |= AccountStatus::Touched;
     }
 
     /// Unmarks the touch flag.
+    #[inline]
     pub fn unmark_touch(&mut self) {
         self.status -= AccountStatus::Touched;
     }
 
     /// If account status is marked as touched.
+    #[inline]
     pub fn is_touched(&self) -> bool {
         self.status.contains(AccountStatus::Touched)
     }
 
     /// Marks the account as newly created.
+    #[inline]
     pub fn mark_created(&mut self) {
         self.status |= AccountStatus::Created;
     }
 
     /// Unmarks the created flag.
+    #[inline]
     pub fn unmark_created(&mut self) {
         self.status -= AccountStatus::Created;
     }
 
     /// Marks the account as cold.
+    #[inline]
     pub fn mark_cold(&mut self) {
         self.status |= AccountStatus::Cold;
+    }
+
+    /// Is account warm for given transaction id.
+    #[inline]
+    pub fn is_cold_transaction_id(&self, transaction_id: usize) -> bool {
+        self.transaction_id != transaction_id || self.status.contains(AccountStatus::Cold)
     }
 
     /// Marks the account as warm and return true if it was previously cold.
     #[inline]
     pub fn mark_warm_with_transaction_id(&mut self, transaction_id: usize) -> bool {
-        let same_id = self.transaction_id == transaction_id;
-        let is_cold = self.status.contains(AccountStatus::Cold);
-
+        let is_cold = self.is_cold_transaction_id(transaction_id);
         self.status -= AccountStatus::Cold;
         self.transaction_id = transaction_id;
-
-        if !same_id {
-            return true;
-        }
-
         is_cold
     }
 
@@ -252,6 +263,7 @@ impl From<AccountInfo> for Account {
     fn from(info: AccountInfo) -> Self {
         Self {
             info,
+            original_info: None,
             storage: HashMap::default(),
             transaction_id: 0,
             status: AccountStatus::empty(),
@@ -385,21 +397,22 @@ impl EvmStorageSlot {
         self.is_cold = true;
     }
 
+    /// Is storage slot cold for given transaction id.
+    #[inline]
+    pub fn is_cold_transaction_id(&self, transaction_id: usize) -> bool {
+        self.transaction_id != transaction_id || self.is_cold
+    }
+
     /// Marks the storage slot as warm and sets transaction_id to the given value
     ///
     ///
     /// Returns false if old transition_id is different from given id or in case they are same return `Self::is_cold` value.
     #[inline]
     pub fn mark_warm_with_transaction_id(&mut self, transaction_id: usize) -> bool {
-        let same_id = self.transaction_id == transaction_id;
+        let is_cold = self.is_cold_transaction_id(transaction_id);
         self.transaction_id = transaction_id;
-        let was_cold = core::mem::replace(&mut self.is_cold, false);
-
-        if same_id {
-            // only if transaction id is same we are returning was_cold.
-            return was_cold;
-        }
-        true
+        self.is_cold = false;
+        is_cold
     }
 }
 
@@ -500,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_account_with_storage() {
-        let mut storage = HashMap::new();
+        let mut storage = HashMap::<StorageKey, EvmStorageSlot>::default();
         let key1 = StorageKey::from(1);
         let key2 = StorageKey::from(2);
         let slot1 = EvmStorageSlot::new(StorageValue::from(10), 0);
@@ -612,7 +625,7 @@ mod tests {
 
         let slot_key = StorageKey::from(42);
         let slot_value = EvmStorageSlot::new(StorageValue::from(123), 0);
-        let mut storage = HashMap::new();
+        let mut storage = HashMap::<StorageKey, EvmStorageSlot>::default();
         storage.insert(slot_key, slot_value.clone());
 
         // Chain multiple builder methods together
@@ -630,5 +643,18 @@ mod tests {
         assert!(account.is_created());
         assert!(account.is_touched());
         assert!(!account.status.contains(AccountStatus::Cold));
+    }
+
+    #[test]
+    fn test_account_is_cold_transaction_id() {
+        let mut account = Account::default();
+        // only case where it is warm.
+        assert!(!account.is_cold_transaction_id(0));
+
+        // all other cases are cold
+        assert!(account.is_cold_transaction_id(1));
+        account.mark_cold();
+        assert!(account.is_cold_transaction_id(0));
+        assert!(account.is_cold_transaction_id(1));
     }
 }

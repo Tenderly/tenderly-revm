@@ -216,13 +216,13 @@ pub trait JournalTr {
     /// Get original account states (captured at first load in block)
     /// Returns empty HashMap if not supported by this Journal implementation
     fn get_original_account_states(&self) -> HashMap<Address, AccountInfo> {
-        HashMap::new() // Default implementation for compatibility
+        HashMap::with_hasher(Default::default()) // Default implementation for compatibility
     }
 
     /// Get original storage states (captured at first load in block)  
     /// Returns empty HashMap if not supported by this Journal implementation
     fn get_original_storage_states(&self) -> HashMap<Address, HashMap<StorageKey, StorageValue>> {
-        HashMap::new() // Default implementation for compatibility
+        HashMap::with_hasher(Default::default()) // Default implementation for compatibility
     }
 
     /// Get current modified state
