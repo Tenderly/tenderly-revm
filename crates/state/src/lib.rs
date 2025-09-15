@@ -22,6 +22,9 @@ use primitives::{HashMap, StorageKey, StorageValue};
 pub struct Account {
     /// Balance, nonce, and code
     pub info: AccountInfo,
+    /// Original account info at the start of the block (before any modifications).
+    /// This matches the behavior of storage slots which have original_value.
+    pub original_info: Option<AccountInfo>,
     /// Transaction id, used to track when account was toched/loaded into journal.
     pub transaction_id: usize,
     /// Storage cache
@@ -33,8 +36,10 @@ pub struct Account {
 impl Account {
     /// Creates new account and mark it as non existing.
     pub fn new_not_existing(transaction_id: usize) -> Self {
+        let info = AccountInfo::default();
         Self {
-            info: AccountInfo::default(),
+            original_info: Some(info.clone()),
+            info,
             storage: HashMap::default(),
             transaction_id,
             status: AccountStatus::LoadedAsNotExisting,
@@ -260,6 +265,7 @@ impl Account {
 impl From<AccountInfo> for Account {
     fn from(info: AccountInfo) -> Self {
         Self {
+            original_info: Some(info.clone()),
             info,
             storage: HashMap::default(),
             transaction_id: 0,
