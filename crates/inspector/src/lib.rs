@@ -5,6 +5,10 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// Suppress unused dependency warning when tracer feature is not enabled
+#[cfg(not(feature = "tracer"))]
+use serde as _;
+
 mod count_inspector;
 #[cfg(feature = "tracer")]
 mod eip3155;
